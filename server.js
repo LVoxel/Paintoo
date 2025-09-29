@@ -1,6 +1,6 @@
 const express = require('express');
 const { WebSocketServer } = require('ws');
-const { WebSocket } = require('ws'); // Импорт WebSocket для констант
+const { WebSocket } = require('ws');
 const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -16,8 +16,10 @@ const wss = new WebSocketServer({ server });
 wss.on('connection', (ws) => {
   console.log('Новый клиент подключен');
   ws.on('message', (message) => {
+    console.log('Получено сообщение от клиента:', message.toString());
     wss.clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) { // Используем импортированный WebSocket.OPEN
+      if (client.readyState === WebSocket.OPEN) {
+        console.log('Отправка сообщения клиенту:', message.toString());
         client.send(message);
       }
     });

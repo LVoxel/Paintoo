@@ -79,10 +79,11 @@
         const ws = new WebSocket('wss://' + window.location.host);
 
         ws.onopen = () => {
-            console.log('Подключено к серверу');
+            console.log('WebSocket подключен');
         };
 
         ws.onmessage = (event) => {
+            console.log('Получено сообщение от сервера:', event.data);
             const data = JSON.parse(event.data);
             if (data.type === 'draw') {
                 data.lines.forEach(line => {
@@ -91,6 +92,14 @@
             } else if (data.type === 'clear') {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
             }
+        };
+
+        ws.onerror = (error) => {
+            console.error('WebSocket ошибка:', error);
+        };
+
+        ws.onclose = () => {
+            console.log('WebSocket отключен');
         };
 
         canvas.addEventListener('mousedown', (e) => {
@@ -148,10 +157,8 @@
         let sendTimeout;
         function sendBuffer() {
             if (drawBuffer.length > 0 && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
-                    type: 'draw',
-                    lines: drawBuffer
-                }));
+                console.log('Отправка данных на сервер:', JSON.stringify({ type: 'draw', lines: drawBuffer }));
+                ws.send(JSON.stringify({ type: 'draw', lines: drawBuffer }));
                 drawBuffer = [];
             }
             clearTimeout(sendTimeout);
@@ -171,6 +178,7 @@
         clearBtn.addEventListener('click', () => {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             if (ws.readyState === WebSocket.OPEN) {
+                console.log('Отправка команды очистки');
                 ws.send(JSON.stringify({ type: 'clear' }));
             }
         });
