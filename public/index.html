@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Совместное рисование</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #f3f4f6;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+            cursor: none; /* Скрыть курсор на холсте */
+        }
+        #brushPreview {
+            position: fixed;
+            pointer-events: none;
+            border: 2px solid #3b82f6;
+            border-radius: 50%;
+            background: rgba(59, 130, 246, 0.1);
+            z-index: 100;
+            display: none;
+            transition: width 0.1s, height 0.1s, border-color 0.2s;
+        }
+        #brushPreview.eraser {
+            border-color: #ef4444;
+            background: rgba(239, 68, 68, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="controls fixed top-4 left-4 bg-white/80 p-4 rounded-lg shadow-lg flex flex-col gap-2 z-10">
+        <div class="flex gap-2">
+            <button id="clearBtn" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded">Очистить</button>
+            <button id="eraserBtn" class="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded transition-colors">Ластик</button>
+        </div>
+        <div class="flex gap-2 items-center">
+            <label for="colorPicker" class="text-sm">Цвет:</label>
+            <input type="color" id="colorPicker" value="#000000" class="w-10 h-10 p-1 border rounded">
+        </div>
+        <div class="flex gap-2 items-center">
+            <label for="brushSize" class="text-sm">Размер кисти:</label>
+            <input type="range" id="brushSize" min="1" max="20" value="5" class="w-24">
+        </div>
+    </div>
+    <canvas id="canvas"></canvas>
+    <div id="brushPreview"></div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const colorPicker = document.getElementById('colorPicker');
+        const brushSize = document.getElementById('brushSize');
+        const clearBtn = document.getElementById('clearBtn');
+        const eraserBtn = document.getElementById('eraserBtn');
+        const brushPreview = document.getElementById('brushPreview');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+        let drawBuffer = [];
+        let isErasing = false;
+
+        const ws = new WebSocket('wss://' + window.location.host);
+
+        ws.onopen = () => {
+            console.log('Подключено к серверу');
+        };
+
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.type === 'draw') {
+                data.lines.forEach(line => {
+                    draw(line.startX, line.startY, line.endX, line.endY, line.color, line.lineWidth);
+                });
+            } else if (data.type === 'clear') {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+        };
+
+        canvas.addEventListener('mousedown', (e) => {
+            isDrawing = true;
+            lastX = e.clientX;
+            lastY = e.clientY;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (isDrawing) {
+                const currentX = e.clientX;
+                const currentY = e.clientY;
+                const color = isErasing ? '#f3f4f6' : colorPicker.value; // Белый цвет для ластика
+                draw(lastX, lastY, currentX, currentY, color, brushSize.value);
+                drawBuffer.push({
+                    startX: lastX,
+                    startY: lastY,
+                    endX: currentX,
+                    endY: currentY,
+                    color: color,
+                    lineWidth: brushSize.value
+                });
+                lastX = currentX;
+                lastY = currentY;
+
+                if (!sendTimeout) {
+                    sendTimeout = setTimeout(sendBuffer, 50);
+                }
+            }
+
+            // Показываем и двигаем круг
+            brushPreview.style.display = 'block';
+            const size = brushSize.value;
+            brushPreview.style.width = size + 'px';
+            brushPreview.style.height = size + 'px';
+            brushPreview.style.left = (e.clientX - size / 2) + 'px';
+            brushPreview.style.top = (e.clientY - size / 2) + 'px';
+            brushPreview.classList.toggle('eraser', isErasing);
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            isDrawing = false;
+            sendBuffer();
+        });
+
+        canvas.addEventListener('mouseout', () => {
+            isDrawing = false;
+            sendBuffer();
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            brushPreview.style.display = 'none';
+        });
+
+        let sendTimeout;
+        function sendBuffer() {
+            if (drawBuffer.length > 0 && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'draw',
+                    lines: drawBuffer
+                }));
+                drawBuffer = [];
+            }
+            clearTimeout(sendTimeout);
+            sendTimeout = null;
+        }
+
+        function draw(startX, startY, endX, endY, color, lineWidth) {
+            ctx.beginPath();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = lineWidth;
+            ctx.moveTo(startX, startY);
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
+            ctx.closePath();
+        }
+
+        clearBtn.addEventListener('click', () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'clear' }));
+            }
+        });
+
+        brushSize.addEventListener('input', (e) => {
+            // Обновляем размер круга при изменении размера кисти
+            brushPreview.style.width = e.target.value + 'px';
+            brushPreview.style.height = e.target.value + 'px';
+        });
+
+        eraserBtn.addEventListener('click', () => {
+            isErasing = !isErasing;
+            if (isErasing) {
+                eraserBtn.classList.remove('bg-gray-500', 'hover:bg-gray-600');
+                eraserBtn.classList.add('bg-blue-500', 'hover:bg-blue-600');
+            } else {
+                eraserBtn.classList.remove('bg-blue-500', 'hover:bg-blue-600');
+                eraserBtn.classList.add('bg-gray-500', 'hover:bg-gray-600');
+            }
+            brushPreview.classList.toggle('eraser', isErasing);
+        });
+    </script>
+</body>
+</html>
