@@ -15,7 +15,7 @@
             display: block;
             width: 100vw;
             height: 100vh;
-            cursor: none; /* Скрыть курсор на холсте */
+            cursor: none;
         }
         #brushPreview {
             position: fixed;
@@ -83,8 +83,22 @@
         };
 
         ws.onmessage = (event) => {
-            console.log('Получено сообщение от сервера:', event.data);
-            const data = JSON.parse(event.data);
+            console.log('Получено сообщение от сервера. Тип данных:', typeof event.data, 'Данные:', event.data);
+            let data;
+            if (event.data instanceof Blob) {
+                const reader = new FileReader();
+                reader.onload = function() {
+                    data = JSON.parse(reader.result);
+                    handleMessage(data);
+                };
+                reader.readAsText(event.data);
+            } else {
+                data = JSON.parse(event.data);
+                handleMessage(data);
+            }
+        };
+
+        function handleMessage(data) {
             if (data.type === 'draw') {
                 data.lines.forEach(line => {
                     draw(line.startX, line.startY, line.endX, line.endY, line.color, line.lineWidth);
@@ -92,7 +106,7 @@
             } else if (data.type === 'clear') {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
             }
-        };
+        }
 
         ws.onerror = (error) => {
             console.error('WebSocket ошибка:', error);
@@ -112,7 +126,7 @@
             if (isDrawing) {
                 const currentX = e.clientX;
                 const currentY = e.clientY;
-                const color = isErasing ? '#f3f4f6' : colorPicker.value; // Белый цвет для ластика
+                const color = isErasing ? '#f3f4f6' : colorPicker.value;
                 draw(lastX, lastY, currentX, currentY, color, brushSize.value);
                 drawBuffer.push({
                     startX: lastX,
@@ -130,7 +144,6 @@
                 }
             }
 
-            // Показываем и двигаем круг
             brushPreview.style.display = 'block';
             const size = brushSize.value;
             brushPreview.style.width = size + 'px';
@@ -157,8 +170,9 @@
         let sendTimeout;
         function sendBuffer() {
             if (drawBuffer.length > 0 && ws.readyState === WebSocket.OPEN) {
-                console.log('Отправка данных на сервер:', JSON.stringify({ type: 'draw', lines: drawBuffer }));
-                ws.send(JSON.stringify({ type: 'draw', lines: drawBuffer }));
+                const message = JSON.stringify({ type: 'draw', lines: drawBuffer });
+                console.log('Отправка данных на сервер:', message);
+                ws.send(message);
                 drawBuffer = [];
             }
             clearTimeout(sendTimeout);
@@ -184,7 +198,6 @@
         });
 
         brushSize.addEventListener('input', (e) => {
-            // Обновляем размер круга при изменении размера кисти
             brushPreview.style.width = e.target.value + 'px';
             brushPreview.style.height = e.target.value + 'px';
         });
