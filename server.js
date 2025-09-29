@@ -14,10 +14,9 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 const wss = new WebSocketServer({ server });
 
 wss.on('connection', (ws) => {
-  console.log('Новый клиент подключен');
+  console.log('Новый клиент подключен. Всего клиентов:', wss.clients.size);
   ws.on('message', (message) => {
-    console.log('Получено сообщение от клиента. Тип:', typeof message, 'Данные:', message);
-    // Преобразуем в строку, если это Buffer или Blob
+    console.log('Получено сообщение от клиента. Тип:', typeof message, 'Данные:', message.toString());
     let data;
     if (Buffer.isBuffer(message)) {
       data = message.toString();
@@ -37,13 +36,15 @@ wss.on('connection', (ws) => {
   function broadcast(data) {
     wss.clients.forEach((client) => {
       if (client.readyState === WebSocket.OPEN) {
-        console.log('Отправка сообщения клиенту:', data);
+        console.log(`Отправка сообщения клиенту. Активных клиентов: ${wss.clients.size}, Данные: ${data}`);
         client.send(data);
+      } else {
+        console.log(`Клиент не готов (readyState: ${client.readyState})`);
       }
     });
   }
 
   ws.on('close', () => {
-    console.log('Клиент отключен');
+    console.log('Клиент отключен. Осталось клиентов:', wss.clients.size);
   });
 });

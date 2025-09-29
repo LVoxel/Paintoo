@@ -85,25 +85,31 @@
         ws.onmessage = (event) => {
             console.log('Получено сообщение от сервера. Тип данных:', typeof event.data, 'Данные:', event.data);
             let data;
-            if (event.data instanceof Blob) {
-                const reader = new FileReader();
-                reader.onload = function() {
-                    data = JSON.parse(reader.result);
+            try {
+                if (event.data instanceof Blob) {
+                    const reader = new FileReader();
+                    reader.onload = function() {
+                        data = JSON.parse(reader.result);
+                        handleMessage(data);
+                    };
+                    reader.readAsText(event.data);
+                } else {
+                    data = JSON.parse(event.data);
                     handleMessage(data);
-                };
-                reader.readAsText(event.data);
-            } else {
-                data = JSON.parse(event.data);
-                handleMessage(data);
+                }
+            } catch (e) {
+                console.error('Ошибка парсинга данных:', e, 'Исходные данные:', event.data);
             }
         };
 
         function handleMessage(data) {
             if (data.type === 'draw') {
+                console.log('Обработка draw данных:', data.lines);
                 data.lines.forEach(line => {
                     draw(line.startX, line.startY, line.endX, line.endY, line.color, line.lineWidth);
                 });
             } else if (data.type === 'clear') {
+                console.log('Обработка команды очистки');
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
             }
         }
