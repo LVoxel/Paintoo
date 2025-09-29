@@ -16,10 +16,11 @@ const wss = new WebSocketServer({ server });
 wss.on('connection', (ws) => {
   console.log('Новый клиент подключен. Всего клиентов:', wss.clients.size);
   ws.on('message', (message) => {
-    console.log('Получено сообщение от клиента. Тип:', typeof message, 'Данные:', message.toString());
+    console.log('Получено сообщение от клиента. Тип:', typeof message, 'Данные:', message);
     let data;
     if (Buffer.isBuffer(message)) {
       data = message.toString();
+      broadcast(data);
     } else if (message instanceof Blob) {
       const reader = new FileReader();
       reader.onload = function() {
