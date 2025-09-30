@@ -30,6 +30,15 @@ wss.on('connection', (ws) => {
       drawHistory = drawHistory.concat(parsedData.lines);
     } else if (parsedData.type === 'clear') {
       drawHistory = []; // Очистка истории при clear
+    } else if (parsedData.type === 'erase') {
+      const { x, y, size } = parsedData;
+      // Упрощённое удаление: удаляем линии, близкие к точке стирания
+      drawHistory = drawHistory.filter(line => {
+        const midX = (line.startX + line.endX) / 2;
+        const midY = (line.startY + line.endY) / 2;
+        const distance = Math.sqrt((midX - x) ** 2 + (midY - y) ** 2);
+        return distance > size / 2; // Удаляем, если центр линии внутри радиуса стирания
+      });
     }
     broadcast(data, ws); // Передаём отправителя, чтобы не отправлять ему обратно
   });

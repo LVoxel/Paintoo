@@ -116,6 +116,9 @@
             } else if (data.type === 'clear') {
                 console.log('Обработка команды очистки');
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
+            } else if (data.type === 'erase') {
+                console.log('Обработка команды стирания:', data);
+                ctx.clearRect(data.x - data.size / 2, data.y - data.size / 2, data.size, data.size);
             }
         }
 
@@ -137,16 +140,29 @@
             if (isDrawing) {
                 const currentX = e.clientX;
                 const currentY = e.clientY;
-                const color = isErasing ? '#f3f4f6' : colorPicker.value;
-                drawCircle(lastX, lastY, currentX, currentY, color, brushSize.value);
-                drawBuffer.push({
-                    startX: lastX,
-                    startY: lastY,
-                    endX: currentX,
-                    endY: currentY,
-                    color: color,
-                    lineWidth: brushSize.value
-                });
+                const size = brushSize.value;
+                if (isErasing) {
+                    // Стирание области
+                    drawBuffer.push({
+                        type: 'erase',
+                        x: currentX,
+                        y: currentY,
+                        size: size
+                    });
+                    ctx.clearRect(currentX - size / 2, currentY - size / 2, size, size);
+                } else {
+                    // Рисование
+                    const color = colorPicker.value;
+                    drawCircle(lastX, lastY, currentX, currentY, color, size);
+                    drawBuffer.push({
+                        startX: lastX,
+                        startY: lastY,
+                        endX: currentX,
+                        endY: currentY,
+                        color: color,
+                        lineWidth: size
+                    });
+                }
                 lastX = currentX;
                 lastY = currentY;
 
@@ -181,7 +197,7 @@
         let sendTimeout;
         function sendBuffer() {
             if (drawBuffer.length > 0 && ws.readyState === WebSocket.OPEN) {
-                const message = JSON.stringify({ type: 'draw', lines: drawBuffer });
+                const message = JSON.stringify({ type: drawBuffer[0].type || 'draw', ...drawBuffer });
                 console.log('Отправка данных на сервер:', message);
                 ws.send(message);
                 drawBuffer = [];
@@ -191,7 +207,7 @@
         }
 
         function drawCircle(startX, startY, endX, endY, color, lineWidth) {
-            const steps = 5; // Количество промежуточных кругов для плотности
+            const steps = 5;
             const dx = (endX - startX) / steps;
             const dy = (endY - startY) / steps;
 
