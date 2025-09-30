@@ -146,6 +146,7 @@
                 if (isErasing) {
                     // Стирание области
                     drawBuffer.push({
+                        type: 'erase',
                         x: currentX,
                         y: currentY,
                         size: size
@@ -198,8 +199,10 @@
         let sendTimeout;
         function sendBuffer() {
             if (drawBuffer.length > 0 && ws.readyState === WebSocket.OPEN) {
-                const type = isErasing ? 'erase' : 'draw';
-                const message = JSON.stringify({ type: type, lines: drawBuffer });
+                const message = JSON.stringify({
+                    type: drawBuffer[0].type || 'draw',
+                    points: drawBuffer // Отправляем массив точек
+                });
                 console.log('Отправка данных на сервер:', message);
                 ws.send(message);
                 drawBuffer = [];
