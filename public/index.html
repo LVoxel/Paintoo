@@ -106,7 +106,12 @@
             if (data.type === 'draw') {
                 console.log('Обработка draw данных:', data.lines);
                 data.lines.forEach(line => {
-                    draw(line.startX, line.startY, line.endX, line.endY, line.color, line.lineWidth);
+                    drawCircle(line.startX, line.startY, line.endX, line.endY, line.color, line.lineWidth);
+                });
+            } else if (data.type === 'history') {
+                console.log('Обработка истории:', data.lines);
+                data.lines.forEach(line => {
+                    drawCircle(line.startX, line.startY, line.endX, line.endY, line.color, line.lineWidth);
                 });
             } else if (data.type === 'clear') {
                 console.log('Обработка команды очистки');
@@ -133,7 +138,7 @@
                 const currentX = e.clientX;
                 const currentY = e.clientY;
                 const color = isErasing ? '#f3f4f6' : colorPicker.value;
-                draw(lastX, lastY, currentX, currentY, color, brushSize.value);
+                drawCircle(lastX, lastY, currentX, currentY, color, brushSize.value);
                 drawBuffer.push({
                     startX: lastX,
                     startY: lastY,
@@ -185,14 +190,20 @@
             sendTimeout = null;
         }
 
-        function draw(startX, startY, endX, endY, color, lineWidth) {
-            ctx.beginPath();
-            ctx.strokeStyle = color;
-            ctx.lineWidth = lineWidth;
-            ctx.moveTo(startX, startY);
-            ctx.lineTo(endX, endY);
-            ctx.stroke();
-            ctx.closePath();
+        function drawCircle(startX, startY, endX, endY, color, lineWidth) {
+            const steps = 5; // Количество промежуточных кругов для плотности
+            const dx = (endX - startX) / steps;
+            const dy = (endY - startY) / steps;
+
+            for (let i = 0; i <= steps; i++) {
+                const x = startX + dx * i;
+                const y = startY + dy * i;
+                ctx.beginPath();
+                ctx.fillStyle = color;
+                ctx.arc(x, y, lineWidth / 2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.closePath();
+            }
         }
 
         clearBtn.addEventListener('click', () => {

@@ -12,25 +12,37 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 });
 
 const wss = new WebSocketServer({ server });
+let drawHistory = [];
 
 wss.on('connection', (ws) => {
   console.log('Новый клиент подключен. Всего клиентов:', wss.clients.size);
+  // Отправка истории новому клиенту
+  if (drawHistory.length > 0) {
+    console.log('Отправка истории новому клиенту:', JSON.stringify({ type: 'history', lines: drawHistory }));
+    ws.send(JSON.stringify({ type: 'history', lines: drawHistory }));
+  }
+
   ws.on('message', (message) => {
     console.log('Получено сообщение от клиента. Тип:', typeof message, 'Данные:', message);
     let data;
     if (Buffer.isBuffer(message)) {
       data = message.toString();
-      broadcast(data);
     } else if (message instanceof Blob) {
       const reader = new FileReader();
       reader.onload = function() {
         data = reader.result.toString();
         broadcast(data);
+        if (JSON.parse(data).type === 'draw') {
+          drawHistory = drawHistory.concat(JSON.parse(data).lines);
+        }
       };
       reader.readAsText(message);
     } else {
       data = message.toString();
       broadcast(data);
+      if (JSON.parse(data).type === 'draw') {
+        drawHistory = drawHistory.concat(JSON.parse(data).lines);
+      }
     }
   });
 
