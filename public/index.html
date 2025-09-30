@@ -118,7 +118,9 @@
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
             } else if (data.type === 'erase') {
                 console.log('Обработка команды стирания:', data);
-                ctx.clearRect(data.x - data.size / 2, data.y - data.size / 2, data.size, data.size);
+                data.points.forEach(point => {
+                    ctx.clearRect(point.x - point.size / 2, point.y - point.size / 2, point.size, point.size);
+                });
             }
         }
 
@@ -197,7 +199,10 @@
         let sendTimeout;
         function sendBuffer() {
             if (drawBuffer.length > 0 && ws.readyState === WebSocket.OPEN) {
-                const message = JSON.stringify({ type: drawBuffer[0].type || 'draw', ...drawBuffer });
+                const message = JSON.stringify({
+                    type: drawBuffer[0].type || 'draw',
+                    points: drawBuffer // Отправляем массив точек
+                });
                 console.log('Отправка данных на сервер:', message);
                 ws.send(message);
                 drawBuffer = [];
