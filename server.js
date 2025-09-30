@@ -27,21 +27,9 @@ wss.on('connection', (ws) => {
     let data = message.toString(); // Всегда преобразуем в строку
     const parsedData = JSON.parse(data);
     if (parsedData.type === 'draw') {
-      drawHistory = drawHistory.concat(parsedData.points);
+      drawHistory = drawHistory.concat(parsedData.lines);
     } else if (parsedData.type === 'clear') {
       drawHistory = []; // Очистка истории при clear
-    } else if (parsedData.type === 'erase') {
-      const { points } = parsedData;
-      points.forEach(point => {
-        const { x, y, size } = point;
-        // Удаляем линии, чьи центры попадают в область стирания
-        drawHistory = drawHistory.filter(line => {
-          const midX = (line.startX + line.endX) / 2;
-          const midY = (line.startY + line.endY) / 2;
-          const distance = Math.sqrt((midX - x) ** 2 + (midY - y) ** 2);
-          return distance > size / 2;
-        });
-      });
     }
     broadcast(data, ws); // Передаём отправителя, чтобы не отправлять ему обратно
   });
