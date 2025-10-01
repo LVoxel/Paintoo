@@ -176,7 +176,7 @@
             <div class="tool-section-title">Инструменты рисования</div>
             <div class="flex flex-col gap-2">
                 <button id="brushBtn" class="tool-btn active">🖌️ Кисть</button>
-                <button id="bubbleBrushBtn" class="tool-btn">⚪ Пузырьковая кисть</button>
+                <button id="bubbleBrushBtn" class="tool-btn">⚪ Пузырьковая кисть(Не работает)</button>
                 <button id="eraserBtn" class="tool-btn">🧹 Ластик</button>
             </div>
         </div>
@@ -667,13 +667,67 @@
             }
         }
 
+        let isClearing = false;
+        
         clearBtn.addEventListener('click', () => {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            drawHistory = [];
-            if (ws.readyState === WebSocket.OPEN) {
-                console.log('Отправка команды очистки');
-                ws.send(JSON.stringify({ type: 'clear' }));
+            if (isClearing) return;
+            
+            isClearing = true;
+            clearBtn.disabled = true;
+            clearBtn.textContent = 'Очистка...';
+            
+            // Анимация очистки
+            const startTime = performance.now();
+            const duration = 800; // Длительность анимации в мс
+            
+            function animateClear(currentTime) {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                
+                // Easing функция для плавности
+                const easeProgress = 1 - Math.pow(1 - progress, 3);
+                
+                // Очищаем холст с эффектом "занавеса" сверху вниз
+                ctx.clearRect(0, 0, canvas.width, canvas.height * easeProgress);
+                
+                // Рисуем оставшуюся часть
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(0, canvas.height * easeProgress, canvas.width, canvas.height);
+                ctx.clip();
+                
+                drawHistory.forEach(item => {
+                    if (item.type !== 'erase' && item.startX !== undefined && item.endX !== undefined) {
+                        drawShape(item);
+                    }
+                });
+                
+                drawHistory.forEach(item => {
+                    if (item.type === 'erase') {
+                        ctx.clearRect(item.x - item.size / 2, item.y - item.size / 2, item.size, item.size);
+                    }
+                });
+                
+                ctx.restore();
+                
+                if (progress < 1) {
+                    requestAnimationFrame(animateClear);
+                } else {
+                    // Анимация завершена
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    drawHistory = [];
+                    isClearing = false;
+                    clearBtn.disabled = false;
+                    clearBtn.textContent = 'Очистить холст';
+                    
+                    if (ws.readyState === WebSocket.OPEN) {
+                        console.log('Отправка команды очистки');
+                        ws.send(JSON.stringify({ type: 'clear' }));
+                    }
+                }
             }
+            
+            requestAnimationFrame(animateClear);
         });
 
         brushSize.addEventListener('input', (e) => {
