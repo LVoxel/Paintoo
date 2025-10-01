@@ -41,6 +41,22 @@
             padding: 1rem 2rem;
             border-radius: 0.5rem;
             z-index: 200;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .spinner {
+            width: 1.5rem;
+            height: 1.5rem;
+            border: 3px solid #ffffff;
+            border-top: 3px solid transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
         #clientId {
             position: fixed;
@@ -72,7 +88,10 @@
     </div>
     <canvas id="canvas"></canvas>
     <div id="brushPreview"></div>
-    <div id="loading">Загрузка...</div>
+    <div id="loading">
+        <div class="spinner"></div>
+        Загрузка...
+    </div>
     <div id="clientId"></div>
 
     <script>
