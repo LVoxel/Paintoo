@@ -18,8 +18,18 @@ wss.on('connection', (ws) => {
   console.log('Новый клиент подключен. Всего клиентов:', wss.clients.size);
   // Отправка истории новому клиенту
   if (drawHistory.length > 0) {
-    console.log('Отправка истории новому клиенту:', JSON.stringify({ type: 'history', lines: drawHistory }));
-    ws.send(JSON.stringify({ type: 'history', lines: drawHistory }));
+    // Фильтруем null значения перед отправкой
+    const filteredHistory = drawHistory.filter(item => item !== null);
+    if (filteredHistory.length > 0) {
+      console.log('Отправка истории новому клиенту:', JSON.stringify({ type: 'history', points: filteredHistory }));
+      ws.send(JSON.stringify({ type: 'history', points: filteredHistory }));
+    } else {
+      console.log('История пуста, отправка не требуется');
+      ws.send(JSON.stringify({ type: 'history', points: [] })); // Отправляем пустой массив
+    }
+  } else {
+    console.log('История пуста, отправка не требуется');
+    ws.send(JSON.stringify({ type: 'history', points: [] })); // Отправляем пустой массив
   }
 
   ws.on('message', (message) => {
@@ -27,9 +37,29 @@ wss.on('connection', (ws) => {
     let data = message.toString(); // Всегда преобразуем в строку
     const parsedData = JSON.parse(data);
     if (parsedData.type === 'draw') {
-      drawHistory = drawHistory.concat(parsedData.lines);
+      // Используем points вместо lines
+      if (parsedData.points) {
+        drawHistory = drawHistory.concat(parsedData.points);
+      }
     } else if (parsedData.type === 'clear') {
       drawHistory = []; // Очистка истории при clear
+    } else if (parsedData.type === 'erase') {
+      const { points } = parsedData;
+      if (points) {
+        points.forEach(point => {
+          const { x, y, size } = point;
+          // Удаляем линии, чьи центры попадают в область стирания
+          drawHistory = drawHistory.filter(line => {
+            if (line && line.startX !== undefined && line.endX !== undefined) {
+              const midX = (line.startX + line.endX) / 2;
+              const midY = (line.startY + line.endY) / 2;
+              const distance = Math.sqrt((midX - x) ** 2 + (midY - y) ** 2);
+              return distance > size / 2;
+            }
+            return true; // Сохраняем null или некорректные записи
+          });
+        });
+      }
     }
     broadcast(data, ws); // Передаём отправителя, чтобы не отправлять ему обратно
   });

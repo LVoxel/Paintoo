@@ -93,7 +93,13 @@
 
         ws.onopen = () => {
             console.log('WebSocket подключен');
+            // Скрываем загрузку сразу, если соединение установлено
+            if (!drawHistoryReceived) {
+                loading.style.display = 'none';
+            }
         };
+
+        let drawHistoryReceived = false;
 
         ws.onmessage = (event) => {
             console.log('Получено сообщение от сервера. Тип данных:', typeof event.data, 'Данные:', event.data);
@@ -123,10 +129,15 @@
                 });
             } else if (data.type === 'history') {
                 console.log('Обработка истории:', data.points);
-                data.points.forEach(line => {
-                    drawCircle(line.startX, line.startY, line.endX, line.endY, line.color, line.lineWidth);
-                });
-                loading.style.display = 'none'; // Скрываем загрузку после обработки истории
+                if (data.points && Array.isArray(data.points)) {
+                    data.points.forEach(line => {
+                        if (line && line.startX !== undefined && line.endX !== undefined) {
+                            drawCircle(line.startX, line.startY, line.endX, line.endY, line.color, line.lineWidth);
+                        }
+                    });
+                }
+                loading.style.display = 'none'; // Скрываем загрузку после обработки
+                drawHistoryReceived = true;
             } else if (data.type === 'clear') {
                 console.log('Обработка команды очистки');
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
