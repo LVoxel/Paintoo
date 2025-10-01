@@ -130,7 +130,7 @@
         const clientIdElement = document.getElementById('clientId');
         const pageTitle = document.getElementById('pageTitle');
 
-        let drawHistory = [];
+        let drawHistory = []; // Массив для хранения истории рисования на клиенте
 
         function resizeCanvas() {
             canvas.width = window.innerWidth;
@@ -294,10 +294,6 @@
             isDrawing = true;
             startX = e.clientX;
             startY = e.clientY;
-            ctx.beginPath();
-            ctx.fillStyle = colorPicker.value;
-            ctx.strokeStyle = colorPicker.value;
-            ctx.lineWidth = brushSize.value;
         });
 
         canvas.addEventListener('mousemove', (e) => {
@@ -307,12 +303,45 @@
                 const size = brushSize.value;
                 const color = colorPicker.value;
 
-                // Отрисовываем только предпросмотр
-                ctx.clearRect(0, 0, canvas.width, canvas.height); // Очищаем для предпросмотра
-                drawHistory.forEach(line => drawShape(line)); // Перерисовываем историю
-                if (isErasing) {
-                    ctx.clearRect(currentX - size / 2, currentY - size / 2, size, size);
+                if (isErasing || currentTool === 'brush' || currentTool === 'bubbleBrush') {
+                    // Реальное время для кистей и ластика
+                    if (isErasing) {
+                        drawBuffer.push({
+                            type: 'erase',
+                            x: currentX,
+                            y: currentY,
+                            size: size
+                        });
+                        ctx.clearRect(currentX - size / 2, currentY - size / 2, size, size);
+                    } else if (currentTool === 'brush') {
+                        drawCircle(startX, startY, currentX, currentY, color, size);
+                        drawBuffer.push({
+                            startX,
+                            startY,
+                            endX: currentX,
+                            endY: currentY,
+                            color,
+                            lineWidth: size,
+                            tool: currentTool
+                        });
+                    } else if (currentTool === 'bubbleBrush') {
+                        drawBubbleBrush(startX, startY, currentX, currentY, color, size);
+                        drawBuffer.push({
+                            startX,
+                            startY,
+                            endX: currentX,
+                            endY: currentY,
+                            color,
+                            lineWidth: size,
+                            tool: currentTool
+                        });
+                    }
+                    startX = currentX;
+                    startY = currentY;
                 } else {
+                    // Предпросмотр для фигур
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    drawHistory.forEach(line => drawShape(line));
                     drawShape({ startX, startY, endX: currentX, endY: currentY, color, lineWidth: size, tool: currentTool });
                 }
             }
@@ -333,14 +362,7 @@
                 const size = brushSize.value;
                 const color = colorPicker.value;
 
-                if (isErasing) {
-                    drawBuffer.push({
-                        type: 'erase',
-                        x: endX,
-                        y: endY,
-                        size: size
-                    });
-                } else {
+                if (!isErasing && currentTool !== 'brush' && currentTool !== 'bubbleBrush') {
                     drawBuffer.push({
                         startX,
                         startY,
@@ -363,14 +385,7 @@
                 const size = brushSize.value;
                 const color = colorPicker.value;
 
-                if (isErasing) {
-                    drawBuffer.push({
-                        type: 'erase',
-                        x: endX,
-                        y: endY,
-                        size: size
-                    });
-                } else {
+                if (!isErasing && currentTool !== 'brush' && currentTool !== 'bubbleBrush') {
                     drawBuffer.push({
                         startX,
                         startY,
