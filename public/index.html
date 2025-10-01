@@ -51,6 +51,13 @@
     <canvas id="canvas"></canvas>
     <div id="brushPreview"></div>
 
+    <div id="loadingOverlay" class="fixed inset-0 bg-gray-900/50 flex items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-lg shadow-xl flex flex-col items-center gap-3">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+            <p class="text-gray-700">Загрузка...</p>
+        </div>
+    </div>
+
     <script>
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
