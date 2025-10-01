@@ -176,7 +176,7 @@
             <div class="tool-section-title">Инструменты рисования</div>
             <div class="flex flex-col gap-2">
                 <button id="brushBtn" class="tool-btn active">🖌️ Кисть</button>
-                <button id="bubbleBrushBtn" class="tool-btn">⚪ Пузырьковая кисть(Не работает)</button>
+                <button id="bubbleBrushBtn" class="tool-btn">⚪ Пузырьковая кисть</button>
                 <button id="eraserBtn" class="tool-btn">🧹 Ластик</button>
             </div>
         </div>
@@ -543,10 +543,21 @@
             console.log('WebSocket отключен');
         };
 
+        let sendInterval;
+        const SEND_INTERVAL_MS = 50; // Отправка данных каждые 50мс
+
         canvas.addEventListener('mousedown', (e) => {
             isDrawing = true;
             startX = e.clientX;
             startY = e.clientY;
+            
+            // Начинаем периодическую отправку данных
+            if (sendInterval) clearInterval(sendInterval);
+            sendInterval = setInterval(() => {
+                if (drawBuffer.length > 0) {
+                    sendBuffer();
+                }
+            }, SEND_INTERVAL_MS);
         });
 
         canvas.addEventListener('mousemove', (e) => {
@@ -629,6 +640,13 @@
                     segments.forEach(seg => drawShape(seg));
                 }
                 
+                // Останавливаем периодическую отправку
+                if (sendInterval) {
+                    clearInterval(sendInterval);
+                    sendInterval = null;
+                }
+                
+                // Отправляем оставшиеся данные
                 sendBuffer();
                 isDrawing = false;
             }
@@ -636,6 +654,11 @@
 
         canvas.addEventListener('mouseout', () => {
             if (isDrawing) {
+                // Останавливаем периодическую отправку
+                if (sendInterval) {
+                    clearInterval(sendInterval);
+                    sendInterval = null;
+                }
                 sendBuffer();
                 isDrawing = false;
             }
