@@ -91,6 +91,7 @@
         </div>
         <div class="flex gap-2">
             <button id="brushBtn" class="tool-btn active">Кисть</button>
+            <button id="bubbleBrushBtn" class="tool-btn">Пузырьковая кисть</button>
             <button id="lineBtn" class="tool-btn">Линия</button>
             <button id="rectBtn" class="tool-btn">Прямоугольник</button>
             <button id="circleBtn" class="tool-btn">Круг</button>
@@ -120,6 +121,7 @@
         const clearBtn = document.getElementById('clearBtn');
         const eraserBtn = document.getElementById('eraserBtn');
         const brushBtn = document.getElementById('brushBtn');
+        const bubbleBrushBtn = document.getElementById('bubbleBrushBtn');
         const lineBtn = document.getElementById('lineBtn');
         const rectBtn = document.getElementById('rectBtn');
         const circleBtn = document.getElementById('circleBtn');
@@ -139,8 +141,8 @@
         ctx.lineJoin = 'round';
 
         let isDrawing = false;
-        let lastX = 0;
-        let lastY = 0;
+        let startX = 0;
+        let startY = 0;
         let drawBuffer = [];
         let isErasing = false;
         let currentTool = 'brush';
@@ -220,6 +222,9 @@
                 case 'brush':
                     drawCircle(startX, startY, endX, endY, color, lineWidth);
                     break;
+                case 'bubbleBrush':
+                    drawBubbleBrush(startX, startY, endX, endY, color, lineWidth);
+                    break;
                 case 'line':
                     ctx.moveTo(startX, startY);
                     ctx.lineTo(endX, endY);
@@ -229,108 +234,15 @@
                     const width = endX - startX;
                     const height = endY - startY;
                     ctx.rect(startX, startY, width, height);
-                    ctx.fill();
+                    ctx.stroke();
                     break;
                 case 'circle':
-                    const radius = Math.sqrt((endX - startX) ** 2 + (endY - startY) ** 2);
+                    const radius = Math.sqrt((endX - startX) ** 2 + (endY - startY) ** 2) / 2;
                     ctx.arc(startX, startY, radius, 0, Math.PI * 2);
-                    ctx.fill();
+                    ctx.stroke();
                     break;
             }
             ctx.closePath();
-        }
-
-        ws.onerror = (error) => {
-            console.error('WebSocket ошибка:', error);
-        };
-
-        ws.onclose = () => {
-            console.log('WebSocket отключен');
-        };
-
-        canvas.addEventListener('mousedown', (e) => {
-            isDrawing = true;
-            lastX = e.clientX;
-            lastY = e.clientY;
-        });
-
-        canvas.addEventListener('mousemove', (e) => {
-            if (isDrawing) {
-                const currentX = e.clientX;
-                const currentY = e.clientY;
-                const size = brushSize.value;
-                const color = colorPicker.value;
-
-                ctx.beginPath();
-                ctx.fillStyle = color;
-                ctx.strokeStyle = color;
-                ctx.lineWidth = size;
-
-                if (isErasing) {
-                    drawBuffer.push({
-                        type: 'erase',
-                        x: currentX,
-                        y: currentY,
-                        size: size
-                    });
-                    ctx.clearRect(currentX - size / 2, currentY - size / 2, size, size);
-                } else {
-                    drawBuffer.push({
-                        startX: lastX,
-                        startY: lastY,
-                        endX: currentX,
-                        endY: currentY,
-                        color: color,
-                        lineWidth: size,
-                        tool: currentTool
-                    });
-                    drawShape({ startX: lastX, startY: lastY, endX: currentX, endY: currentY, color, lineWidth: size, tool: currentTool });
-                }
-
-                lastX = currentX;
-                lastY = currentY;
-
-                if (!sendTimeout) {
-                    sendTimeout = setTimeout(sendBuffer, 50);
-                }
-            }
-
-            brushPreview.style.display = 'block';
-            const size = brushSize.value;
-            brushPreview.style.width = size + 'px';
-            brushPreview.style.height = size + 'px';
-            brushPreview.style.left = (e.clientX - size / 2) + 'px';
-            brushPreview.style.top = (e.clientY - size / 2) + 'px';
-            brushPreview.classList.toggle('eraser', isErasing);
-        });
-
-        canvas.addEventListener('mouseup', () => {
-            isDrawing = false;
-            sendBuffer();
-        });
-
-        canvas.addEventListener('mouseout', () => {
-            isDrawing = false;
-            sendBuffer();
-        });
-
-        canvas.addEventListener('mouseleave', () => {
-            brushPreview.style.display = 'none';
-        });
-
-        let sendTimeout;
-        function sendBuffer() {
-            if (drawBuffer.length > 0 && ws.readyState === WebSocket.OPEN) {
-                const message = JSON.stringify({
-                    type: drawBuffer[0].type || 'draw',
-                    points: drawBuffer
-                });
-                console.log('Отправка данных на сервер:', message);
-                ws.send(message);
-                drawBuffer = [];
-            }
-            clearTimeout(sendTimeout);
-            sendTimeout = null;
         }
 
         function drawCircle(startX, startY, endX, endY, color, lineWidth) {
@@ -347,6 +259,154 @@
                 ctx.fill();
                 ctx.closePath();
             }
+        }
+
+        function drawBubbleBrush(startX, startY, endX, endY, color, lineWidth) {
+            const steps = 5;
+            const dx = (endX - startX) / steps;
+            const dy = (endY - startY) / steps;
+
+            for (let i = 0; i <= steps; i++) {
+                const x = startX + dx * i;
+                const y = startY + dy * i;
+                ctx.beginPath();
+                ctx.fillStyle = color;
+                ctx.arc(x, y, lineWidth, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.closePath();
+            }
+        }
+
+        ws.onerror = (error) => {
+            console.error('WebSocket ошибка:', error);
+        };
+
+        ws.onclose = () => {
+            console.log('WebSocket отключен');
+        };
+
+        canvas.addEventListener('mousedown', (e) => {
+            isDrawing = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            ctx.beginPath();
+            ctx.fillStyle = colorPicker.value;
+            ctx.strokeStyle = colorPicker.value;
+            ctx.lineWidth = brushSize.value;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (isDrawing) {
+                const currentX = e.clientX;
+                const currentY = e.clientY;
+                const size = brushSize.value;
+                const color = colorPicker.value;
+
+                // Очистка предыдущего предпросмотра
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                if (drawHistoryReceived) {
+                    drawHistory.forEach(line => drawShape(line));
+                }
+
+                if (isErasing) {
+                    ctx.clearRect(currentX - size / 2, currentY - size / 2, size, size);
+                } else {
+                    drawShape({ startX, startY, endX: currentX, endY: currentY, color, lineWidth: size, tool: currentTool });
+                }
+            }
+
+            brushPreview.style.display = 'block';
+            const size = brushSize.value;
+            brushPreview.style.width = size + 'px';
+            brushPreview.style.height = size + 'px';
+            brushPreview.style.left = (e.clientX - size / 2) + 'px';
+            brushPreview.style.top = (e.clientY - size / 2) + 'px';
+            brushPreview.classList.toggle('eraser', isErasing);
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            if (isDrawing) {
+                const endX = e.clientX;
+                const endY = e.clientY;
+                const size = brushSize.value;
+                const color = colorPicker.value;
+
+                if (isErasing) {
+                    drawBuffer.push({
+                        type: 'erase',
+                        x: endX,
+                        y: endY,
+                        size: size
+                    });
+                } else {
+                    drawBuffer.push({
+                        startX,
+                        startY,
+                        endX,
+                        endY,
+                        color,
+                        lineWidth: size,
+                        tool: currentTool
+                    });
+                }
+                sendBuffer();
+                isDrawing = false;
+            }
+        });
+
+        canvas.addEventListener('mouseout', () => {
+            if (isDrawing) {
+                const endX = lastX;
+                const endY = lastY;
+                const size = brushSize.value;
+                const color = colorPicker.value;
+
+                if (isErasing) {
+                    drawBuffer.push({
+                        type: 'erase',
+                        x: endX,
+                        y: endY,
+                        size: size
+                    });
+                } else {
+                    drawBuffer.push({
+                        startX,
+                        startY,
+                        endX,
+                        endY,
+                        color,
+                        lineWidth: size,
+                        tool: currentTool
+                    });
+                }
+                sendBuffer();
+                isDrawing = false;
+            }
+            brushPreview.style.display = 'none';
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            brushPreview.style.display = 'none';
+        });
+
+        let sendTimeout;
+        function sendBuffer() {
+            if (drawBuffer.length > 0 && ws.readyState === WebSocket.OPEN) {
+                const message = JSON.stringify({
+                    type: drawBuffer[0].type || 'draw',
+                    points: drawBuffer
+                });
+                console.log('Отправка данных на сервер:', message);
+                ws.send(message);
+                drawBuffer = [];
+                // Перерисовка истории после отправки
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                if (drawHistoryReceived) {
+                    drawHistory.forEach(line => drawShape(line));
+                }
+            }
+            clearTimeout(sendTimeout);
+            sendTimeout = null;
         }
 
         clearBtn.addEventListener('click', () => {
@@ -376,10 +436,10 @@
             brushPreview.classList.toggle('eraser', isErasing);
         });
 
-        [brushBtn, lineBtn, rectBtn, circleBtn].forEach(btn => {
+        [brushBtn, bubbleBrushBtn, lineBtn, rectBtn, circleBtn].forEach(btn => {
             btn.addEventListener('click', () => {
                 currentTool = btn.id.replace('Btn', '').toLowerCase();
-                [brushBtn, lineBtn, rectBtn, circleBtn, eraserBtn].forEach(b => b.classList.remove('active'));
+                [brushBtn, bubbleBrushBtn, lineBtn, rectBtn, circleBtn, eraserBtn].forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 isErasing = false;
                 eraserBtn.classList.remove('bg-blue-500', 'hover:bg-blue-600');
