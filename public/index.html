@@ -77,6 +77,9 @@
             cursor: pointer;
             transition: background-color 0.2s;
         }
+        .tool-btn:hover {
+            background-color: #e5e7eb;
+        }
         .tool-btn.active {
             background-color: #3b82f6;
             color: white;
@@ -130,11 +133,17 @@
         const clientIdElement = document.getElementById('clientId');
         const pageTitle = document.getElementById('pageTitle');
 
-        let drawHistory = []; // Массив для хранения истории рисования на клиенте
+        let drawHistory = [];
+        let tempCanvas = document.createElement('canvas');
+        let tempCtx = tempCanvas.getContext('2d');
 
         function resizeCanvas() {
+            const oldImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+            ctx.putImageData(oldImageData, 0, 0);
         }
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
@@ -146,10 +155,12 @@
         let startX = 0;
         let startY = 0;
         let drawBuffer = [];
-        let isErasing = false;
         let currentTool = 'brush';
+        let previewFrame = null;
 
-        const ws = new WebSocket('wss://' + window.location.host);
+        // WebSocket с поддержкой локальной разработки
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(protocol + '//' + window.location.host);
 
         ws.onopen = () => {
             console.log('WebSocket подключен');
@@ -161,7 +172,7 @@
         let drawHistoryReceived = false;
 
         ws.onmessage = (event) => {
-            console.log('Получено сообщение от сервера. Тип данных:', typeof event.data, 'Данные:', event.data);
+            console.log('Получено сообщение от сервера');
             let data;
             try {
                 if (event.data instanceof Blob) {
@@ -176,19 +187,19 @@
                     handleMessage(data);
                 }
             } catch (e) {
-                console.error('Ошибка парсинга данных:', e, 'Исходные данные:', event.data);
+                console.error('Ошибка парсинга данных:', e);
             }
         };
 
         function handleMessage(data) {
             if (data.type === 'draw') {
-                console.log('Обработка draw данных:', data.points);
+                console.log('Обработка draw данных');
                 data.points.forEach(line => {
                     drawShape(line);
+                    drawHistory.push(line);
                 });
-                drawHistory = drawHistory.concat(data.points); // Обновляем drawHistory
             } else if (data.type === 'init') {
-                console.log('Обработка инициализации:', data);
+                console.log('Обработка инициализации');
                 clientIdElement.textContent = `Client ID: ${data.clientId}`;
                 pageTitle.textContent = `Paintoo (${data.userCount} users)`;
                 if (data.points && Array.isArray(data.points)) {
@@ -197,7 +208,7 @@
                             drawShape(line);
                         }
                     });
-                    drawHistory = data.points; // Инициализируем drawHistory
+                    drawHistory = data.points;
                 }
                 loading.style.display = 'none';
                 drawHistoryReceived = true;
@@ -207,20 +218,28 @@
             } else if (data.type === 'clear') {
                 console.log('Обработка команды очистки');
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
-                drawHistory = []; // Очищаем drawHistory
+                drawHistory = [];
             } else if (data.type === 'erase') {
-                console.log('Обработка команды стирания:', data.points);
+                console.log('Обработка команды стирания');
                 data.points.forEach(point => {
                     ctx.clearRect(point.x - point.size / 2, point.y - point.size / 2, point.size, point.size);
                 });
+                drawHistory = drawHistory.concat(data.points.map(p => ({
+                    type: 'erase',
+                    x: p.x,
+                    y: p.y,
+                    size: p.size
+                })));
             }
         }
 
         function redrawHistory() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            drawHistory.forEach(line => {
-                if (line && line.startX !== undefined && line.endX !== undefined) {
-                    drawShape(line);
+            drawHistory.forEach(item => {
+                if (item.type === 'erase') {
+                    ctx.clearRect(item.x - item.size / 2, item.y - item.size / 2, item.size, item.size);
+                } else if (item.startX !== undefined && item.endX !== undefined) {
+                    drawShape(item);
                 }
             });
         }
@@ -234,7 +253,7 @@
 
             switch (tool) {
                 case 'brush':
-                    drawCircle(startX, startY, endX, endY, color, lineWidth);
+                    drawBrushStroke(startX, startY, endX, endY, color, lineWidth);
                     break;
                 case 'bubbleBrush':
                     drawBubbleBrush(startX, startY, endX, endY, color, lineWidth);
@@ -259,8 +278,9 @@
             ctx.closePath();
         }
 
-        function drawCircle(startX, startY, endX, endY, color, lineWidth) {
-            const steps = 5;
+        function drawBrushStroke(startX, startY, endX, endY, color, lineWidth) {
+            const distance = Math.sqrt((endX - startX) ** 2 + (endY - startY) ** 2);
+            const steps = Math.max(Math.ceil(distance / 2), 1);
             const dx = (endX - startX) / steps;
             const dy = (endY - startY) / steps;
 
@@ -276,7 +296,8 @@
         }
 
         function drawBubbleBrush(startX, startY, endX, endY, color, lineWidth) {
-            const steps = 5;
+            const distance = Math.sqrt((endX - startX) ** 2 + (endY - startY) ** 2);
+            const steps = Math.max(Math.ceil(distance / 2), 1);
             const dx = (endX - startX) / steps;
             const dy = (endY - startY) / steps;
 
@@ -285,7 +306,7 @@
                 const y = startY + dy * i;
                 ctx.beginPath();
                 ctx.fillStyle = color;
-                ctx.arc(x, y, lineWidth, 0, Math.PI * 2);
+                ctx.arc(x, y, lineWidth / 2, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.closePath();
             }
@@ -306,74 +327,79 @@
         });
 
         canvas.addEventListener('mousemove', (e) => {
-            if (isDrawing) {
-                const currentX = e.clientX;
-                const currentY = e.clientY;
-                const size = brushSize.value;
-                const color = colorPicker.value;
+            const currentX = e.clientX;
+            const currentY = e.clientY;
+            const size = parseInt(brushSize.value);
+            const color = colorPicker.value;
 
-                if (isErasing || currentTool === 'brush' || currentTool === 'bubbleBrush') {
-                    // Реальное время для кистей и ластика
-                    if (isErasing) {
-                        drawBuffer.push({
-                            type: 'erase',
-                            x: currentX,
-                            y: currentY,
-                            size: size
-                        });
-                        ctx.clearRect(currentX - size / 2, currentY - size / 2, size, size);
-                    } else if (currentTool === 'brush') {
-                        drawCircle(startX, startY, currentX, currentY, color, size);
-                        drawBuffer.push({
-                            startX,
-                            startY,
-                            endX: currentX,
-                            endY: currentY,
-                            color,
-                            lineWidth: size,
-                            tool: currentTool
-                        });
-                    } else if (currentTool === 'bubbleBrush') {
+            if (isDrawing) {
+                if (currentTool === 'erase') {
+                    ctx.clearRect(currentX - size / 2, currentY - size / 2, size, size);
+                    drawBuffer.push({
+                        type: 'erase',
+                        x: currentX,
+                        y: currentY,
+                        size: size
+                    });
+                } else if (currentTool === 'brush' || currentTool === 'bubbleBrush') {
+                    if (currentTool === 'brush') {
+                        drawBrushStroke(startX, startY, currentX, currentY, color, size);
+                    } else {
                         drawBubbleBrush(startX, startY, currentX, currentY, color, size);
-                        drawBuffer.push({
-                            startX,
-                            startY,
-                            endX: currentX,
-                            endY: currentY,
-                            color,
-                            lineWidth: size,
-                            tool: currentTool
-                        });
                     }
+                    drawBuffer.push({
+                        startX,
+                        startY,
+                        endX: currentX,
+                        endY: currentY,
+                        color,
+                        lineWidth: size,
+                        tool: currentTool
+                    });
                     startX = currentX;
                     startY = currentY;
                 } else {
-                    // Предпросмотр для фигур (с сохранением состояния)
-                    ctx.save();
-                    ctx.globalAlpha = 0.5; // Полупрозрачный предпросмотр
-                    drawShape({ startX, startY, endX: currentX, endY: currentY, color, lineWidth: size, tool: currentTool });
-                    ctx.restore();
+                    // Предпросмотр для фигур
+                    if (previewFrame) {
+                        cancelAnimationFrame(previewFrame);
+                    }
+                    previewFrame = requestAnimationFrame(() => {
+                        redrawHistory();
+                        ctx.save();
+                        ctx.globalAlpha = 0.5;
+                        drawShape({ 
+                            startX, 
+                            startY, 
+                            endX: currentX, 
+                            endY: currentY, 
+                            color, 
+                            lineWidth: size, 
+                            tool: currentTool 
+                        });
+                        ctx.restore();
+                        previewFrame = null;
+                    });
                 }
             }
 
+            // Обновление предпросмотра кисти
             brushPreview.style.display = 'block';
-            const size = brushSize.value;
             brushPreview.style.width = size + 'px';
             brushPreview.style.height = size + 'px';
-            brushPreview.style.left = (e.clientX - size / 2) + 'px';
-            brushPreview.style.top = (e.clientY - size / 2) + 'px';
-            brushPreview.classList.toggle('eraser', isErasing);
+            brushPreview.style.left = (currentX - size / 2) + 'px';
+            brushPreview.style.top = (currentY - size / 2) + 'px';
+            brushPreview.classList.toggle('eraser', currentTool === 'erase');
         });
 
         canvas.addEventListener('mouseup', (e) => {
             if (isDrawing) {
                 const endX = e.clientX;
                 const endY = e.clientY;
-                const size = brushSize.value;
+                const size = parseInt(brushSize.value);
                 const color = colorPicker.value;
 
-                if (!isErasing && currentTool !== 'brush' && currentTool !== 'bubbleBrush') {
-                    drawBuffer.push({
+                if (currentTool !== 'erase' && currentTool !== 'brush' && currentTool !== 'bubbleBrush') {
+                    const shape = {
                         startX,
                         startY,
                         endX,
@@ -381,9 +407,12 @@
                         color,
                         lineWidth: size,
                         tool: currentTool
-                    });
-                    drawShape({ startX, startY, endX, endY, color, lineWidth: size, tool: currentTool });
+                    };
+                    drawBuffer.push(shape);
+                    redrawHistory();
+                    drawShape(shape);
                 }
+                
                 sendBuffer();
                 isDrawing = false;
             }
@@ -391,23 +420,6 @@
 
         canvas.addEventListener('mouseout', () => {
             if (isDrawing) {
-                const endX = startX; // Используем startX как запасной вариант
-                const endY = startY;
-                const size = brushSize.value;
-                const color = colorPicker.value;
-
-                if (!isErasing && currentTool !== 'brush' && currentTool !== 'bubbleBrush') {
-                    drawBuffer.push({
-                        startX,
-                        startY,
-                        endX,
-                        endY,
-                        color,
-                        lineWidth: size,
-                        tool: currentTool
-                    });
-                    drawShape({ startX, startY, endX, endY, color, lineWidth: size, tool: currentTool });
-                }
                 sendBuffer();
                 isDrawing = false;
             }
@@ -418,23 +430,30 @@
             brushPreview.style.display = 'none';
         });
 
-        let sendTimeout;
         function sendBuffer() {
             if (drawBuffer.length > 0 && ws.readyState === WebSocket.OPEN) {
+                const type = drawBuffer[0].type === 'erase' ? 'erase' : 'draw';
                 const message = JSON.stringify({
-                    type: drawBuffer[0].type || 'draw',
+                    type: type,
                     points: drawBuffer
                 });
-                console.log('Отправка данных на сервер:', message);
+                console.log('Отправка данных на сервер:', type);
                 ws.send(message);
+                
+                // Добавляем в локальную историю только если это не стирание
+                if (type === 'draw') {
+                    drawHistory = drawHistory.concat(drawBuffer);
+                } else {
+                    drawHistory = drawHistory.concat(drawBuffer);
+                }
+                
                 drawBuffer = [];
             }
-            clearTimeout(sendTimeout);
-            sendTimeout = null;
         }
 
         clearBtn.addEventListener('click', () => {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawHistory = [];
             if (ws.readyState === WebSocket.OPEN) {
                 console.log('Отправка команды очистки');
                 ws.send(JSON.stringify({ type: 'clear' }));
@@ -442,34 +461,31 @@
         });
 
         brushSize.addEventListener('input', (e) => {
-            brushPreview.style.width = e.target.value + 'px';
-            brushPreview.style.height = e.target.value + 'px';
+            const size = e.target.value;
+            brushPreview.style.width = size + 'px';
+            brushPreview.style.height = size + 'px';
         });
 
         eraserBtn.addEventListener('click', () => {
-            isErasing = !isErasing;
-            if (isErasing) {
-                eraserBtn.classList.remove('bg-gray-500', 'hover:bg-gray-600');
-                eraserBtn.classList.add('bg-blue-500', 'hover:bg-blue-600');
-                currentTool = 'erase';
-            } else {
-                eraserBtn.classList.remove('bg-blue-500', 'hover:bg-blue-600');
-                eraserBtn.classList.add('bg-gray-500', 'hover:bg-gray-600');
-                currentTool = 'brush';
-            }
-            brushPreview.classList.toggle('eraser', isErasing);
+            currentTool = 'erase';
+            [brushBtn, bubbleBrushBtn, lineBtn, rectBtn, circleBtn].forEach(b => b.classList.remove('active'));
+            eraserBtn.classList.add('active');
+            brushPreview.classList.add('eraser');
         });
 
         [brushBtn, bubbleBrushBtn, lineBtn, rectBtn, circleBtn].forEach(btn => {
             btn.addEventListener('click', () => {
-                currentTool = btn.id.replace('Btn', '').toLowerCase();
+                const toolMap = {
+                    'brushBtn': 'brush',
+                    'bubbleBrushBtn': 'bubbleBrush',
+                    'lineBtn': 'line',
+                    'rectBtn': 'rect',
+                    'circleBtn': 'circle'
+                };
+                currentTool = toolMap[btn.id];
                 [brushBtn, bubbleBrushBtn, lineBtn, rectBtn, circleBtn, eraserBtn].forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
-                isErasing = false;
-                eraserBtn.classList.remove('bg-blue-500', 'hover:bg-blue-600');
-                eraserBtn.classList.add('bg-gray-500', 'hover:bg-gray-600');
                 brushPreview.classList.remove('eraser');
-                redrawHistory(); // Перерисовываем историю при смене инструмента
             });
         });
     </script>
