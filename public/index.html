@@ -216,6 +216,15 @@
             }
         }
 
+        function redrawHistory() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawHistory.forEach(line => {
+                if (line && line.startX !== undefined && line.endX !== undefined) {
+                    drawShape(line);
+                }
+            });
+        }
+
         function drawShape(shape) {
             const { startX, startY, endX, endY, color, lineWidth, tool } = shape;
             ctx.beginPath();
@@ -339,10 +348,11 @@
                     startX = currentX;
                     startY = currentY;
                 } else {
-                    // Предпросмотр для фигур
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
-                    drawHistory.forEach(line => drawShape(line));
+                    // Предпросмотр для фигур (с сохранением состояния)
+                    ctx.save();
+                    ctx.globalAlpha = 0.5; // Полупрозрачный предпросмотр
                     drawShape({ startX, startY, endX: currentX, endY: currentY, color, lineWidth: size, tool: currentTool });
+                    ctx.restore();
                 }
             }
 
@@ -372,6 +382,7 @@
                         lineWidth: size,
                         tool: currentTool
                     });
+                    drawShape({ startX, startY, endX, endY, color, lineWidth: size, tool: currentTool });
                 }
                 sendBuffer();
                 isDrawing = false;
@@ -395,6 +406,7 @@
                         lineWidth: size,
                         tool: currentTool
                     });
+                    drawShape({ startX, startY, endX, endY, color, lineWidth: size, tool: currentTool });
                 }
                 sendBuffer();
                 isDrawing = false;
@@ -457,6 +469,7 @@
                 eraserBtn.classList.remove('bg-blue-500', 'hover:bg-blue-600');
                 eraserBtn.classList.add('bg-gray-500', 'hover:bg-gray-600');
                 brushPreview.classList.remove('eraser');
+                redrawHistory(); // Перерисовываем историю при смене инструмента
             });
         });
     </script>
