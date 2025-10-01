@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Paintoo</title>
+    <title id="pageTitle">Paintoo</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
@@ -104,6 +104,7 @@
         const brushPreview = document.getElementById('brushPreview');
         const loading = document.getElementById('loading');
         const clientIdElement = document.getElementById('clientId');
+        const pageTitle = document.getElementById('pageTitle');
 
         function resizeCanvas() {
             canvas.width = window.innerWidth;
@@ -161,6 +162,7 @@
             } else if (data.type === 'init') {
                 console.log('Обработка инициализации:', data);
                 clientIdElement.textContent = `Client ID: ${data.clientId}`;
+                pageTitle.textContent = `Paintoo (${data.userCount} users)`;
                 if (data.points && Array.isArray(data.points)) {
                     data.points.forEach(line => {
                         if (line && line.startX !== undefined && line.endX !== undefined) {
@@ -170,6 +172,9 @@
                 }
                 loading.style.display = 'none';
                 drawHistoryReceived = true;
+            } else if (data.type === 'update') {
+                console.log('Обновление количества пользователей:', data.userCount);
+                pageTitle.textContent = `Paintoo (${data.userCount} users)`;
             } else if (data.type === 'clear') {
                 console.log('Обработка команды очистки');
                 ctx.clearRect(0, 0, canvas.width, canvas.height);

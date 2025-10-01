@@ -18,15 +18,31 @@ wss.on('connection', (ws) => {
   const clientId = Math.floor(Math.random() * 1000) + 1; // Генерируем уникальный ID от 1 до 1000
   console.log(`Новый клиент подключен. Client ID: ${clientId}. Всего клиентов: ${wss.clients.size}`);
   
-  // Отправка истории и Client ID новому клиенту
+  // Отправка начальных данных новому клиенту
   const filteredHistory = drawHistory.filter(item => item !== null);
   const initialMessage = {
     type: 'init',
     clientId: clientId,
+    userCount: wss.clients.size,
     points: filteredHistory.length > 0 ? filteredHistory : []
   };
   console.log('Отправка инициализации новому клиенту:', JSON.stringify(initialMessage));
   ws.send(JSON.stringify(initialMessage));
+
+  // Обновление всех клиентов при изменении количества
+  function updateUserCount() {
+    const userCountMessage = {
+      type: 'update',
+      userCount: wss.clients.size
+    };
+    wss.clients.forEach(client => {
+      if (client.readyState === WebSocket.OPEN) {
+        console.log(`Обновление userCount для всех клиентов: ${JSON.stringify(userCountMessage)}`);
+        client.send(JSON.stringify(userCountMessage));
+      }
+    });
+  }
+  updateUserCount(); // Обновляем сразу после подключения
 
   ws.on('message', (message) => {
     console.log('Получено сообщение от клиента. Тип:', typeof message, 'Данные:', message.toString());
@@ -69,6 +85,11 @@ wss.on('connection', (ws) => {
     broadcast(data, ws);
   });
 
+  ws.on('close', () => {
+    console.log(`Клиент отключен. Client ID: ${clientId}. Осталось клиентов: ${wss.clients.size}`);
+    updateUserCount(); // Обновляем при отключении
+  });
+
   function broadcast(data, sender) {
     wss.clients.forEach((client) => {
       if (client !== sender && client.readyState === WebSocket.OPEN) {
@@ -81,8 +102,4 @@ wss.on('connection', (ws) => {
       }
     });
   }
-
-  ws.on('close', () => {
-    console.log(`Клиент отключен. Client ID: ${clientId}. Осталось клиентов: ${wss.clients.size}`);
-  });
 });
