@@ -235,11 +235,18 @@
 
         function redrawHistory() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Сначала рисуем все фигуры
+            drawHistory.forEach(item => {
+                if (item.type !== 'erase' && item.startX !== undefined && item.endX !== undefined) {
+                    drawShape(item);
+                }
+            });
+            
+            // Затем применяем все операции стирания
             drawHistory.forEach(item => {
                 if (item.type === 'erase') {
                     ctx.clearRect(item.x - item.size / 2, item.y - item.size / 2, item.size, item.size);
-                } else if (item.startX !== undefined && item.endX !== undefined) {
-                    drawShape(item);
                 }
             });
         }
