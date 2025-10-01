@@ -84,30 +84,127 @@
             background-color: #3b82f6;
             color: white;
         }
+        
+        .controls-panel {
+            position: fixed;
+            top: 0;
+            left: -280px;
+            height: 100vh;
+            width: 280px;
+            background: white;
+            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+            transition: left 0.3s ease;
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+            padding: 1rem;
+            gap: 1rem;
+            overflow-y: auto;
+        }
+        
+        .controls-panel.open {
+            left: 0;
+        }
+        
+        .toggle-button {
+            position: fixed;
+            top: 50%;
+            left: 0;
+            transform: translateY(-50%);
+            width: 40px;
+            height: 80px;
+            background: white;
+            border: 1px solid #d1d5db;
+            border-left: none;
+            border-radius: 0 0.5rem 0.5rem 0;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 60;
+            transition: left 0.3s ease;
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+        }
+        
+        .toggle-button:hover {
+            background: #f9fafb;
+        }
+        
+        .toggle-button.open {
+            left: 280px;
+        }
+        
+        .toggle-button svg {
+            transition: transform 0.3s ease;
+        }
+        
+        .toggle-button.open svg {
+            transform: rotate(180deg);
+        }
+        
+        .tool-section {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        .tool-section-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #6b7280;
+            text-transform: uppercase;
+            margin-bottom: 0.25rem;
+        }
     </style>
 </head>
 <body>
-    <div class="controls fixed top-4 left-4 bg-white/80 p-4 rounded-lg shadow-lg flex flex-col gap-2 z-10">
-        <div class="flex gap-2">
-            <button id="clearBtn" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded">Очистить</button>
-            <button id="eraserBtn" class="tool-btn">Ластик</button>
+    <div class="toggle-button" id="toggleButton">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M7 4l6 6-6 6"/>
+        </svg>
+    </div>
+    
+    <div class="controls-panel" id="controlsPanel">
+        <h2 class="text-xl font-bold text-gray-800">Инструменты</h2>
+        
+        <div class="tool-section">
+            <div class="tool-section-title">Основные</div>
+            <button id="clearBtn" class="bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded">Очистить холст</button>
         </div>
-        <div class="flex gap-2">
-            <button id="brushBtn" class="tool-btn active">Кисть</button>
-            <button id="bubbleBrushBtn" class="tool-btn">Пузырьковая кисть</button>
-            <button id="lineBtn" class="tool-btn">Линия</button>
-            <button id="rectBtn" class="tool-btn">Прямоугольник</button>
-            <button id="circleBtn" class="tool-btn">Круг</button>
+        
+        <div class="tool-section">
+            <div class="tool-section-title">Инструменты рисования</div>
+            <div class="flex flex-col gap-2">
+                <button id="brushBtn" class="tool-btn active">🖌️ Кисть</button>
+                <button id="bubbleBrushBtn" class="tool-btn">⚪ Пузырьковая кисть</button>
+                <button id="eraserBtn" class="tool-btn">🧹 Ластик</button>
+            </div>
         </div>
-        <div class="flex gap-2 items-center">
-            <label for="colorPicker" class="text-sm">Цвет:</label>
-            <input type="color" id="colorPicker" value="#000000" class="w-10 h-10 p-1 border rounded">
+        
+        <div class="tool-section">
+            <div class="tool-section-title">Фигуры</div>
+            <div class="flex flex-col gap-2">
+                <button id="lineBtn" class="tool-btn">📏 Линия</button>
+                <button id="rectBtn" class="tool-btn">⬜ Прямоугольник</button>
+                <button id="circleBtn" class="tool-btn">⭕ Круг</button>
+            </div>
         </div>
-        <div class="flex gap-2 items-center">
-            <label for="brushSize" class="text-sm">Размер кисти:</label>
-            <input type="range" id="brushSize" min="1" max="20" value="5" class="w-24">
+        
+        <div class="tool-section">
+            <div class="tool-section-title">Настройки</div>
+            <div class="flex flex-col gap-3">
+                <div class="flex flex-col gap-2">
+                    <label for="colorPicker" class="text-sm font-medium">Цвет:</label>
+                    <input type="color" id="colorPicker" value="#000000" class="w-full h-12 p-1 border rounded cursor-pointer">
+                </div>
+                <div class="flex flex-col gap-2">
+                    <label for="brushSize" class="text-sm font-medium">Размер: <span id="sizeValue">5</span>px</label>
+                    <input type="range" id="brushSize" min="1" max="50" value="5" class="w-full">
+                </div>
+            </div>
         </div>
     </div>
+    
     <canvas id="canvas"></canvas>
     <div id="brushPreview"></div>
     <div id="loading">
@@ -121,6 +218,7 @@
         const ctx = canvas.getContext('2d');
         const colorPicker = document.getElementById('colorPicker');
         const brushSize = document.getElementById('brushSize');
+        const sizeValue = document.getElementById('sizeValue');
         const clearBtn = document.getElementById('clearBtn');
         const eraserBtn = document.getElementById('eraserBtn');
         const brushBtn = document.getElementById('brushBtn');
@@ -132,10 +230,18 @@
         const loading = document.getElementById('loading');
         const clientIdElement = document.getElementById('clientId');
         const pageTitle = document.getElementById('pageTitle');
+        const toggleButton = document.getElementById('toggleButton');
+        const controlsPanel = document.getElementById('controlsPanel');
 
         let drawHistory = [];
         let tempCanvas = document.createElement('canvas');
         let tempCtx = tempCanvas.getContext('2d');
+
+        // Переключение панели инструментов
+        toggleButton.addEventListener('click', () => {
+            controlsPanel.classList.toggle('open');
+            toggleButton.classList.toggle('open');
+        });
 
         function resizeCanvas() {
             const oldImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -572,6 +678,7 @@
 
         brushSize.addEventListener('input', (e) => {
             const size = e.target.value;
+            sizeValue.textContent = size;
             brushPreview.style.width = size + 'px';
             brushPreview.style.height = size + 'px';
         });
