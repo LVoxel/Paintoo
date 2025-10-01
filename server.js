@@ -15,53 +15,58 @@ const wss = new WebSocketServer({ server });
 let drawHistory = []; // Массив для хранения истории рисования
 
 wss.on('connection', (ws) => {
-  console.log('Новый клиент подключен. Всего клиентов:', wss.clients.size);
-  // Отправка истории новому клиенту
-  if (drawHistory.length > 0) {
-    // Фильтруем null значения перед отправкой
-    const filteredHistory = drawHistory.filter(item => item !== null);
-    if (filteredHistory.length > 0) {
-      console.log('Отправка истории новому клиенту:', JSON.stringify({ type: 'history', points: filteredHistory }));
-      ws.send(JSON.stringify({ type: 'history', points: filteredHistory }));
-    } else {
-      console.log('История пуста, отправка не требуется');
-      ws.send(JSON.stringify({ type: 'history', points: [] })); // Отправляем пустой массив
-    }
-  } else {
-    console.log('История пуста, отправка не требуется');
-    ws.send(JSON.stringify({ type: 'history', points: [] })); // Отправляем пустой массив
-  }
+  const clientId = Math.floor(Math.random() * 1000) + 1; // Генерируем уникальный ID от 1 до 1000
+  console.log(`Новый клиент подключен. Client ID: ${clientId}. Всего клиентов: ${wss.clients.size}`);
+  
+  // Отправка истории и Client ID новому клиенту
+  const filteredHistory = drawHistory.filter(item => item !== null);
+  const initialMessage = {
+    type: 'init',
+    clientId: clientId,
+    points: filteredHistory.length > 0 ? filteredHistory : []
+  };
+  console.log('Отправка инициализации новому клиенту:', JSON.stringify(initialMessage));
+  ws.send(JSON.stringify(initialMessage));
 
   ws.on('message', (message) => {
     console.log('Получено сообщение от клиента. Тип:', typeof message, 'Данные:', message.toString());
-    let data = message.toString(); // Всегда преобразуем в строку
+    let data = message.toString();
     const parsedData = JSON.parse(data);
     if (parsedData.type === 'draw') {
-      // Используем points вместо lines
       if (parsedData.points) {
         drawHistory = drawHistory.concat(parsedData.points);
       }
     } else if (parsedData.type === 'clear') {
-      drawHistory = []; // Очистка истории при clear
+      drawHistory = [];
     } else if (parsedData.type === 'erase') {
       const { points } = parsedData;
       if (points) {
         points.forEach(point => {
           const { x, y, size } = point;
-          // Удаляем линии, чьи центры попадают в область стирания
+          const eraseRadius = size / 2;
           drawHistory = drawHistory.filter(line => {
             if (line && line.startX !== undefined && line.endX !== undefined) {
-              const midX = (line.startX + line.endX) / 2;
-              const midY = (line.startY + line.endY) / 2;
-              const distance = Math.sqrt((midX - x) ** 2 + (midY - y) ** 2);
-              return distance > size / 2;
+              const steps = 5;
+              const dx = (line.endX - line.startX) / steps;
+              const dy = (line.endY - line.startY) / steps;
+              let withinErase = false;
+              for (let i = 0; i <= steps; i++) {
+                const checkX = line.startX + dx * i;
+                const checkY = line.startY + dy * i;
+                const distance = Math.sqrt((checkX - x) ** 2 + (checkY - y) ** 2);
+                if (distance <= eraseRadius) {
+                  withinErase = true;
+                  break;
+                }
+              }
+              return !withinErase;
             }
-            return true; // Сохраняем null или некорректные записи
+            return true;
           });
         });
       }
     }
-    broadcast(data, ws); // Передаём отправителя, чтобы не отправлять ему обратно
+    broadcast(data, ws);
   });
 
   function broadcast(data, sender) {
@@ -78,6 +83,6 @@ wss.on('connection', (ws) => {
   }
 
   ws.on('close', () => {
-    console.log('Клиент отключен. Осталось клиентов:', wss.clients.size);
+    console.log(`Клиент отключен. Client ID: ${clientId}. Осталось клиентов: ${wss.clients.size}`);
   });
 });

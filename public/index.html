@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Совместное рисование</title>
+    <title>Paintoo</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
@@ -42,6 +42,17 @@
             border-radius: 0.5rem;
             z-index: 200;
         }
+        #clientId {
+            position: fixed;
+            top: 4px;
+            right: 4px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 0.25rem;
+            z-index: 150;
+            font-size: 0.875rem;
+        }
     </style>
 </head>
 <body>
@@ -62,6 +73,7 @@
     <canvas id="canvas"></canvas>
     <div id="brushPreview"></div>
     <div id="loading">Загрузка...</div>
+    <div id="clientId"></div>
 
     <script>
         const canvas = document.getElementById('canvas');
@@ -72,6 +84,7 @@
         const eraserBtn = document.getElementById('eraserBtn');
         const brushPreview = document.getElementById('brushPreview');
         const loading = document.getElementById('loading');
+        const clientIdElement = document.getElementById('clientId');
 
         function resizeCanvas() {
             canvas.width = window.innerWidth;
@@ -93,7 +106,6 @@
 
         ws.onopen = () => {
             console.log('WebSocket подключен');
-            // Скрываем загрузку сразу, если соединение установлено
             if (!drawHistoryReceived) {
                 loading.style.display = 'none';
             }
@@ -127,8 +139,9 @@
                 data.points.forEach(line => {
                     drawCircle(line.startX, line.startY, line.endX, line.endY, line.color, line.lineWidth);
                 });
-            } else if (data.type === 'history') {
-                console.log('Обработка истории:', data.points);
+            } else if (data.type === 'init') {
+                console.log('Обработка инициализации:', data);
+                clientIdElement.textContent = `Client ID: ${data.clientId}`;
                 if (data.points && Array.isArray(data.points)) {
                     data.points.forEach(line => {
                         if (line && line.startX !== undefined && line.endX !== undefined) {
@@ -136,7 +149,7 @@
                         }
                     });
                 }
-                loading.style.display = 'none'; // Скрываем загрузку после обработки
+                loading.style.display = 'none';
                 drawHistoryReceived = true;
             } else if (data.type === 'clear') {
                 console.log('Обработка команды очистки');
@@ -169,7 +182,6 @@
                 const currentY = e.clientY;
                 const size = brushSize.value;
                 if (isErasing) {
-                    // Стирание области
                     drawBuffer.push({
                         type: 'erase',
                         x: currentX,
@@ -178,7 +190,6 @@
                     });
                     ctx.clearRect(currentX - size / 2, currentY - size / 2, size, size);
                 } else {
-                    // Рисование
                     const color = colorPicker.value;
                     drawCircle(lastX, lastY, currentX, currentY, color, size);
                     drawBuffer.push({
@@ -226,7 +237,7 @@
             if (drawBuffer.length > 0 && ws.readyState === WebSocket.OPEN) {
                 const message = JSON.stringify({
                     type: drawBuffer[0].type || 'draw',
-                    points: drawBuffer // Отправляем массив точек
+                    points: drawBuffer
                 });
                 console.log('Отправка данных на сервер:', message);
                 ws.send(message);
