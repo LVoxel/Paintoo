@@ -319,6 +319,116 @@
             }
         }
 
+        function generateShapeSegments(startX, startY, endX, endY, color, lineWidth, tool) {
+            const segments = [];
+            
+            switch (tool) {
+                case 'line':
+                    const lineDistance = Math.sqrt((endX - startX) ** 2 + (endY - startY) ** 2);
+                    const lineSteps = Math.max(Math.ceil(lineDistance / 3), 1);
+                    for (let i = 0; i < lineSteps; i++) {
+                        const t1 = i / lineSteps;
+                        const t2 = (i + 1) / lineSteps;
+                        segments.push({
+                            startX: startX + (endX - startX) * t1,
+                            startY: startY + (endY - startY) * t1,
+                            endX: startX + (endX - startX) * t2,
+                            endY: startY + (endY - startY) * t2,
+                            color,
+                            lineWidth,
+                            tool: 'line'
+                        });
+                    }
+                    break;
+                    
+                case 'rect':
+                    const width = endX - startX;
+                    const height = endY - startY;
+                    const perimeterSteps = Math.max(Math.ceil((Math.abs(width) + Math.abs(height)) * 2 / 5), 4);
+                    
+                    // Верхняя линия
+                    for (let i = 0; i < perimeterSteps / 4; i++) {
+                        const t1 = i / (perimeterSteps / 4);
+                        const t2 = (i + 1) / (perimeterSteps / 4);
+                        segments.push({
+                            startX: startX + width * t1,
+                            startY: startY,
+                            endX: startX + width * t2,
+                            endY: startY,
+                            color,
+                            lineWidth,
+                            tool: 'line'
+                        });
+                    }
+                    // Правая линия
+                    for (let i = 0; i < perimeterSteps / 4; i++) {
+                        const t1 = i / (perimeterSteps / 4);
+                        const t2 = (i + 1) / (perimeterSteps / 4);
+                        segments.push({
+                            startX: endX,
+                            startY: startY + height * t1,
+                            endX: endX,
+                            endY: startY + height * t2,
+                            color,
+                            lineWidth,
+                            tool: 'line'
+                        });
+                    }
+                    // Нижняя линия
+                    for (let i = 0; i < perimeterSteps / 4; i++) {
+                        const t1 = i / (perimeterSteps / 4);
+                        const t2 = (i + 1) / (perimeterSteps / 4);
+                        segments.push({
+                            startX: endX - width * t1,
+                            startY: endY,
+                            endX: endX - width * t2,
+                            endY: endY,
+                            color,
+                            lineWidth,
+                            tool: 'line'
+                        });
+                    }
+                    // Левая линия
+                    for (let i = 0; i < perimeterSteps / 4; i++) {
+                        const t1 = i / (perimeterSteps / 4);
+                        const t2 = (i + 1) / (perimeterSteps / 4);
+                        segments.push({
+                            startX: startX,
+                            startY: endY - height * t1,
+                            endX: startX,
+                            endY: endY - height * t2,
+                            color,
+                            lineWidth,
+                            tool: 'line'
+                        });
+                    }
+                    break;
+                    
+                case 'circle':
+                    const radius = Math.sqrt((endX - startX) ** 2 + (endY - startY) ** 2) / 2;
+                    const centerX = startX + (endX - startX) / 2;
+                    const centerY = startY + (endY - startY) / 2;
+                    const circleSteps = Math.max(Math.ceil(radius * 2 * Math.PI / 5), 8);
+                    
+                    for (let i = 0; i < circleSteps; i++) {
+                        const angle1 = (i / circleSteps) * Math.PI * 2;
+                        const angle2 = ((i + 1) / circleSteps) * Math.PI * 2;
+                        segments.push({
+                            startX: centerX + Math.cos(angle1) * radius,
+                            startY: centerY + Math.sin(angle1) * radius,
+                            endX: centerX + Math.cos(angle2) * radius,
+                            endY: centerY + Math.sin(angle2) * radius,
+                            color,
+                            lineWidth,
+                            tool: 'line'
+                        });
+                    }
+                    break;
+            }
+            
+            return segments;
+        }
+
         ws.onerror = (error) => {
             console.error('WebSocket ошибка:', error);
         };
@@ -406,18 +516,11 @@
                 const color = colorPicker.value;
 
                 if (currentTool !== 'erase' && currentTool !== 'brush' && currentTool !== 'bubbleBrush') {
-                    const shape = {
-                        startX,
-                        startY,
-                        endX,
-                        endY,
-                        color,
-                        lineWidth: size,
-                        tool: currentTool
-                    };
-                    drawBuffer.push(shape);
+                    // Разбиваем фигуру на сегменты
+                    const segments = generateShapeSegments(startX, startY, endX, endY, color, size, currentTool);
+                    drawBuffer.push(...segments);
                     redrawHistory();
-                    drawShape(shape);
+                    segments.forEach(seg => drawShape(seg));
                 }
                 
                 sendBuffer();
