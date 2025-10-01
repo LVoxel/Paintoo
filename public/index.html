@@ -130,6 +130,8 @@
         const clientIdElement = document.getElementById('clientId');
         const pageTitle = document.getElementById('pageTitle');
 
+        let drawHistory = [];
+
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
@@ -184,6 +186,7 @@
                 data.points.forEach(line => {
                     drawShape(line);
                 });
+                drawHistory = drawHistory.concat(data.points); // Обновляем drawHistory
             } else if (data.type === 'init') {
                 console.log('Обработка инициализации:', data);
                 clientIdElement.textContent = `Client ID: ${data.clientId}`;
@@ -194,6 +197,7 @@
                             drawShape(line);
                         }
                     });
+                    drawHistory = data.points; // Инициализируем drawHistory
                 }
                 loading.style.display = 'none';
                 drawHistoryReceived = true;
@@ -203,6 +207,7 @@
             } else if (data.type === 'clear') {
                 console.log('Обработка команды очистки');
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
+                drawHistory = []; // Очищаем drawHistory
             } else if (data.type === 'erase') {
                 console.log('Обработка команды стирания:', data.points);
                 data.points.forEach(point => {
@@ -238,7 +243,7 @@
                     break;
                 case 'circle':
                     const radius = Math.sqrt((endX - startX) ** 2 + (endY - startY) ** 2) / 2;
-                    ctx.arc(startX, startY, radius, 0, Math.PI * 2);
+                    ctx.arc(startX + (endX - startX) / 2, startY + (endY - startY) / 2, radius, 0, Math.PI * 2);
                     ctx.stroke();
                     break;
             }
@@ -302,12 +307,9 @@
                 const size = brushSize.value;
                 const color = colorPicker.value;
 
-                // Очистка предыдущего предпросмотра
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                if (drawHistoryReceived) {
-                    drawHistory.forEach(line => drawShape(line));
-                }
-
+                // Отрисовываем только предпросмотр
+                ctx.clearRect(0, 0, canvas.width, canvas.height); // Очищаем для предпросмотра
+                drawHistory.forEach(line => drawShape(line)); // Перерисовываем историю
                 if (isErasing) {
                     ctx.clearRect(currentX - size / 2, currentY - size / 2, size, size);
                 } else {
@@ -356,8 +358,8 @@
 
         canvas.addEventListener('mouseout', () => {
             if (isDrawing) {
-                const endX = lastX;
-                const endY = lastY;
+                const endX = startX; // Используем startX как запасной вариант
+                const endY = startY;
                 const size = brushSize.value;
                 const color = colorPicker.value;
 
@@ -399,11 +401,6 @@
                 console.log('Отправка данных на сервер:', message);
                 ws.send(message);
                 drawBuffer = [];
-                // Перерисовка истории после отправки
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                if (drawHistoryReceived) {
-                    drawHistory.forEach(line => drawShape(line));
-                }
             }
             clearTimeout(sendTimeout);
             sendTimeout = null;
