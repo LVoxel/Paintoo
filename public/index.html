@@ -69,13 +69,31 @@
             z-index: 150;
             font-size: 0.875rem;
         }
+        .tool-btn {
+            padding: 0.5rem 1rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.25rem;
+            background-color: #f3f4f6;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .tool-btn.active {
+            background-color: #3b82f6;
+            color: white;
+        }
     </style>
 </head>
 <body>
     <div class="controls fixed top-4 left-4 bg-white/80 p-4 rounded-lg shadow-lg flex flex-col gap-2 z-10">
         <div class="flex gap-2">
             <button id="clearBtn" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded">Очистить</button>
-            <button id="eraserBtn" class="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded transition-colors">Ластик</button>
+            <button id="eraserBtn" class="tool-btn">Ластик</button>
+        </div>
+        <div class="flex gap-2">
+            <button id="brushBtn" class="tool-btn active">Кисть</button>
+            <button id="lineBtn" class="tool-btn">Линия</button>
+            <button id="rectBtn" class="tool-btn">Прямоугольник</button>
+            <button id="circleBtn" class="tool-btn">Круг</button>
         </div>
         <div class="flex gap-2 items-center">
             <label for="colorPicker" class="text-sm">Цвет:</label>
@@ -101,6 +119,10 @@
         const brushSize = document.getElementById('brushSize');
         const clearBtn = document.getElementById('clearBtn');
         const eraserBtn = document.getElementById('eraserBtn');
+        const brushBtn = document.getElementById('brushBtn');
+        const lineBtn = document.getElementById('lineBtn');
+        const rectBtn = document.getElementById('rectBtn');
+        const circleBtn = document.getElementById('circleBtn');
         const brushPreview = document.getElementById('brushPreview');
         const loading = document.getElementById('loading');
         const clientIdElement = document.getElementById('clientId');
@@ -121,6 +143,7 @@
         let lastY = 0;
         let drawBuffer = [];
         let isErasing = false;
+        let currentTool = 'brush';
 
         const ws = new WebSocket('wss://' + window.location.host);
 
@@ -157,7 +180,7 @@
             if (data.type === 'draw') {
                 console.log('Обработка draw данных:', data.points);
                 data.points.forEach(line => {
-                    drawCircle(line.startX, line.startY, line.endX, line.endY, line.color, line.lineWidth);
+                    drawShape(line);
                 });
             } else if (data.type === 'init') {
                 console.log('Обработка инициализации:', data);
@@ -166,7 +189,7 @@
                 if (data.points && Array.isArray(data.points)) {
                     data.points.forEach(line => {
                         if (line && line.startX !== undefined && line.endX !== undefined) {
-                            drawCircle(line.startX, line.startY, line.endX, line.endY, line.color, line.lineWidth);
+                            drawShape(line);
                         }
                     });
                 }
@@ -184,6 +207,37 @@
                     ctx.clearRect(point.x - point.size / 2, point.y - point.size / 2, point.size, point.size);
                 });
             }
+        }
+
+        function drawShape(shape) {
+            const { startX, startY, endX, endY, color, lineWidth, tool } = shape;
+            ctx.beginPath();
+            ctx.fillStyle = color;
+            ctx.strokeStyle = color;
+            ctx.lineWidth = lineWidth || 1;
+
+            switch (tool) {
+                case 'brush':
+                    drawCircle(startX, startY, endX, endY, color, lineWidth);
+                    break;
+                case 'line':
+                    ctx.moveTo(startX, startY);
+                    ctx.lineTo(endX, endY);
+                    ctx.stroke();
+                    break;
+                case 'rect':
+                    const width = endX - startX;
+                    const height = endY - startY;
+                    ctx.rect(startX, startY, width, height);
+                    ctx.fill();
+                    break;
+                case 'circle':
+                    const radius = Math.sqrt((endX - startX) ** 2 + (endY - startY) ** 2);
+                    ctx.arc(startX, startY, radius, 0, Math.PI * 2);
+                    ctx.fill();
+                    break;
+            }
+            ctx.closePath();
         }
 
         ws.onerror = (error) => {
@@ -205,6 +259,13 @@
                 const currentX = e.clientX;
                 const currentY = e.clientY;
                 const size = brushSize.value;
+                const color = colorPicker.value;
+
+                ctx.beginPath();
+                ctx.fillStyle = color;
+                ctx.strokeStyle = color;
+                ctx.lineWidth = size;
+
                 if (isErasing) {
                     drawBuffer.push({
                         type: 'erase',
@@ -214,17 +275,18 @@
                     });
                     ctx.clearRect(currentX - size / 2, currentY - size / 2, size, size);
                 } else {
-                    const color = colorPicker.value;
-                    drawCircle(lastX, lastY, currentX, currentY, color, size);
                     drawBuffer.push({
                         startX: lastX,
                         startY: lastY,
                         endX: currentX,
                         endY: currentY,
                         color: color,
-                        lineWidth: size
+                        lineWidth: size,
+                        tool: currentTool
                     });
+                    drawShape({ startX: lastX, startY: lastY, endX: currentX, endY: currentY, color, lineWidth: size, tool: currentTool });
                 }
+
                 lastX = currentX;
                 lastY = currentY;
 
@@ -305,11 +367,25 @@
             if (isErasing) {
                 eraserBtn.classList.remove('bg-gray-500', 'hover:bg-gray-600');
                 eraserBtn.classList.add('bg-blue-500', 'hover:bg-blue-600');
+                currentTool = 'erase';
             } else {
                 eraserBtn.classList.remove('bg-blue-500', 'hover:bg-blue-600');
                 eraserBtn.classList.add('bg-gray-500', 'hover:bg-gray-600');
+                currentTool = 'brush';
             }
             brushPreview.classList.toggle('eraser', isErasing);
+        });
+
+        [brushBtn, lineBtn, rectBtn, circleBtn].forEach(btn => {
+            btn.addEventListener('click', () => {
+                currentTool = btn.id.replace('Btn', '').toLowerCase();
+                [brushBtn, lineBtn, rectBtn, circleBtn, eraserBtn].forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                isErasing = false;
+                eraserBtn.classList.remove('bg-blue-500', 'hover:bg-blue-600');
+                eraserBtn.classList.add('bg-gray-500', 'hover:bg-gray-600');
+                brushPreview.classList.remove('eraser');
+            });
         });
     </script>
 </body>
