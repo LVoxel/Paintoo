@@ -31,6 +31,17 @@
             border-color: #ef4444;
             background: rgba(239, 68, 68, 0.1);
         }
+        #loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 1rem 2rem;
+            border-radius: 0.5rem;
+            z-index: 200;
+        }
     </style>
 </head>
 <body>
@@ -50,13 +61,7 @@
     </div>
     <canvas id="canvas"></canvas>
     <div id="brushPreview"></div>
-
-    <div id="loadingOverlay" class="fixed inset-0 bg-gray-900/50 flex items-center justify-center z-50">
-        <div class="bg-white p-6 rounded-lg shadow-xl flex flex-col items-center gap-3">
-            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-            <p class="text-gray-700">Загрузка...</p>
-        </div>
-    </div>
+    <div id="loading">Загрузка...</div>
 
     <script>
         const canvas = document.getElementById('canvas');
@@ -66,6 +71,7 @@
         const clearBtn = document.getElementById('clearBtn');
         const eraserBtn = document.getElementById('eraserBtn');
         const brushPreview = document.getElementById('brushPreview');
+        const loading = document.getElementById('loading');
 
         function resizeCanvas() {
             canvas.width = window.innerWidth;
@@ -111,18 +117,24 @@
 
         function handleMessage(data) {
             if (data.type === 'draw') {
-                console.log('Обработка draw данных:', data.lines);
-                data.lines.forEach(line => {
+                console.log('Обработка draw данных:', data.points);
+                data.points.forEach(line => {
                     drawCircle(line.startX, line.startY, line.endX, line.endY, line.color, line.lineWidth);
                 });
             } else if (data.type === 'history') {
-                console.log('Обработка истории:', data.lines);
-                data.lines.forEach(line => {
+                console.log('Обработка истории:', data.points);
+                data.points.forEach(line => {
                     drawCircle(line.startX, line.startY, line.endX, line.endY, line.color, line.lineWidth);
                 });
+                loading.style.display = 'none'; // Скрываем загрузку после обработки истории
             } else if (data.type === 'clear') {
                 console.log('Обработка команды очистки');
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
+            } else if (data.type === 'erase') {
+                console.log('Обработка команды стирания:', data.points);
+                data.points.forEach(point => {
+                    ctx.clearRect(point.x - point.size / 2, point.y - point.size / 2, point.size, point.size);
+                });
             }
         }
 
@@ -144,16 +156,29 @@
             if (isDrawing) {
                 const currentX = e.clientX;
                 const currentY = e.clientY;
-                const color = isErasing ? '#f3f4f6' : colorPicker.value;
-                drawCircle(lastX, lastY, currentX, currentY, color, brushSize.value);
-                drawBuffer.push({
-                    startX: lastX,
-                    startY: lastY,
-                    endX: currentX,
-                    endY: currentY,
-                    color: color,
-                    lineWidth: brushSize.value
-                });
+                const size = brushSize.value;
+                if (isErasing) {
+                    // Стирание области
+                    drawBuffer.push({
+                        type: 'erase',
+                        x: currentX,
+                        y: currentY,
+                        size: size
+                    });
+                    ctx.clearRect(currentX - size / 2, currentY - size / 2, size, size);
+                } else {
+                    // Рисование
+                    const color = colorPicker.value;
+                    drawCircle(lastX, lastY, currentX, currentY, color, size);
+                    drawBuffer.push({
+                        startX: lastX,
+                        startY: lastY,
+                        endX: currentX,
+                        endY: currentY,
+                        color: color,
+                        lineWidth: size
+                    });
+                }
                 lastX = currentX;
                 lastY = currentY;
 
@@ -188,7 +213,10 @@
         let sendTimeout;
         function sendBuffer() {
             if (drawBuffer.length > 0 && ws.readyState === WebSocket.OPEN) {
-                const message = JSON.stringify({ type: 'draw', lines: drawBuffer });
+                const message = JSON.stringify({
+                    type: drawBuffer[0].type || 'draw',
+                    points: drawBuffer // Отправляем массив точек
+                });
                 console.log('Отправка данных на сервер:', message);
                 ws.send(message);
                 drawBuffer = [];
@@ -198,7 +226,7 @@
         }
 
         function drawCircle(startX, startY, endX, endY, color, lineWidth) {
-            const steps = 5; // Количество промежуточных кругов для плотности
+            const steps = 5;
             const dx = (endX - startX) / steps;
             const dy = (endY - startY) / steps;
 
